@@ -3,8 +3,8 @@
  *
  * Home page of code is: http://smartmontools.sourceforge.net
  *
- * Copyright (C) 2006-10 Douglas Gilbert <dougg@torque.net>
- * Copyright (C) 2009-10 Christian Franke <smartmontools-support@lists.sourceforge.net>
+ * Copyright (C) 2006-9 Douglas Gilbert <dougg@torque.net>
+ * Copyright (C) 2009   Christian Franke <smartmontools-support@lists.sourceforge.net>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1341,8 +1341,6 @@ const usb_id_entry usb_ids[] = {
 //{ 0x04b4, 0x6831,     -1, d_cypress }, // Cypress CY7C68310 (ISD-300LP)
   // Myson Century
   { 0x04cf, 0x8818, 0xb007, d_unsup   }, // Myson Century CS8818
-  // Samsung
-  { 0x04e8, 0x5f06,     -1, d_sat     }, // Samsung Story Station
   // Sunplus
   { 0x04fc, 0x0c15, 0xf615, d_sunplus }, // SunPlus SPDIF215
   { 0x04fc, 0x0c25, 0x0103, d_sunplus }, // SunPlus SPDIF225 (USB+SATA->SATA)
@@ -1362,12 +1360,10 @@ const usb_id_entry usb_ids[] = {
   // Freecom
   { 0x07ab, 0xfc8e, 0x010f, d_sunplus }, // Freecom Hard Drive XS
   // Toshiba
-  { 0x0930, 0x0b03,     -1, d_sunplus }, // Toshiba PX1270E-1G16
   { 0x0930, 0x0b09,     -1, d_sunplus }, // Toshiba PX1396E-3T01 (similar to Dura Micro 501)
   // Seagate
   { 0x0bc2, 0x2000,     -1, d_sat     }, // Seagate FreeAgent Go
   { 0x0bc2, 0x2100,     -1, d_sat     }, // Seagate FreeAgent Go
-  { 0x0bc2, 0x3000,     -1, d_sat     }, // Seagate FreeAgent Desktop
   { 0x0bc2, 0x3001,     -1, d_sat     }, // Seagate FreeAgent Desk
   // Dura Micro
   { 0x0c0b, 0xb159, 0x0103, d_sunplus }, // Dura Micro 509

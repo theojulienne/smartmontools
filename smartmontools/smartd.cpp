@@ -1,10 +1,10 @@
 /*
  * Home page of code is: http://smartmontools.sourceforge.net
  *
- * Copyright (C) 2002-10 Bruce Allen <smartmontools-support@lists.sourceforge.net>
- * Copyright (C) 2000    Michael Cornwell <cornwell@acm.org>
- * Copyright (C) 2008    Oliver Bock <brevilo@users.sourceforge.net>
- * Copyright (C) 2008-10 Christian Franke <smartmontools-support@lists.sourceforge.net>
+ * Copyright (C) 2002-9 Bruce Allen <smartmontools-support@lists.sourceforge.net>
+ * Copyright (C) 2000   Michael Cornwell <cornwell@acm.org>
+ * Copyright (C) 2008   Oliver Bock <brevilo@users.sourceforge.net>
+ * Copyright (C) 2008-9 Christian Franke <smartmontools-support@lists.sourceforge.net>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1698,29 +1698,23 @@ static int ATADeviceScan(dev_config & cfg, dev_state & state, ata_device * atade
   // information was ALSO reproduced in the IDENTIFY DEVICE response,
   // but sadly not for ATA-5.  Sigh.
 
+  // do we need to retain SMART data after returning from this routine?
+  bool retainsmartdata = (cfg.usagefailed || cfg.prefail || cfg.usage || cfg.tempdiff || cfg.tempinfo || cfg.tempcrit);
+  
   // do we need to get SMART data?
   bool smart_val_ok = false;
-  if (   cfg.autoofflinetest || cfg.errorlog || cfg.selftest
-      || cfg.usagefailed     || cfg.prefail  || cfg.usage
-      || cfg.tempdiff        || cfg.tempinfo || cfg.tempcrit
-      || cfg.curr_pending_id || cfg.offl_pending_id         ) {
+  if (   retainsmartdata || cfg.autoofflinetest || cfg.selftest || cfg.errorlog
+      || cfg.curr_pending_id || cfg.offl_pending_id                            ) {
 
-    if (ataReadSmartValues(atadev, &state.smartval)) {
-      PrintOut(LOG_INFO, "Device: %s, Read SMART Values failed\n", name);
-      cfg.usagefailed = cfg.prefail = cfg.usage = false;
+    if (ataReadSmartValues(atadev, &state.smartval) ||
+        ataReadSmartThresholds (atadev, &state.smartthres)) {
+      PrintOut(LOG_INFO,"Device: %s, Read SMART Values and/or Thresholds Failed\n",name);
+      retainsmartdata = cfg.usagefailed = cfg.prefail = cfg.usage = false;
       cfg.tempdiff = cfg.tempinfo = cfg.tempcrit = 0;
       cfg.curr_pending_id = cfg.offl_pending_id = 0;
     }
-    else {
+    else
       smart_val_ok = true;
-      if (ataReadSmartThresholds(atadev, &state.smartthres)) {
-        PrintOut(LOG_INFO, "Device: %s, Read SMART Thresholds failed%s\n",
-                 name, (cfg.usagefailed ? ", ignoring -f Directive" : ""));
-        cfg.usagefailed = false;
-        // Let ata_get_attr_state() return ATTRSTATE_NO_THRESHOLD:
-        memset(&state.smartthres, 0, sizeof(state.smartthres));
-      }
-    }
 
     // see if the necessary Attribute is there to monitor offline or
     // current pending sectors or temperature
@@ -4299,7 +4293,8 @@ int main_worker(int argc, char **argv)
         }
         else {
           // exit with configuration file error status
-          return (entries==-3 ? EXIT_READCONF : entries==-2 ? EXIT_NOCONF : EXIT_BADCONF);
+          int status = (entries==-3 ? EXIT_READCONF : entries==-2 ? EXIT_NOCONF : EXIT_BADCONF);
+          EXIT(status);
         }
       }
 
@@ -4315,13 +4310,13 @@ int main_worker(int argc, char **argv)
       }
       else {
         PrintOut(LOG_INFO,"Unable to monitor any SMART enabled devices. Try debug (-d) option. Exiting...\n");
-        return EXIT_NODEV;
+        EXIT(EXIT_NODEV);
       }
 
       if (quit==4) {
         // user has asked to print test schedule
         PrintTestSchedule(configs, states, devices);
-        return 0;
+        EXIT(0);
       }
       
       // reset signal
@@ -4348,7 +4343,7 @@ int main_worker(int argc, char **argv)
     if (quit==3) {
       PrintOut(LOG_INFO,"Started with '-q onecheck' option. All devices sucessfully checked once.\n"
                "smartd is exiting (exit status 0)\n");
-      return 0;
+      EXIT(0);
     }
     
     // fork into background if needed

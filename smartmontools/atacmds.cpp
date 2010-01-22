@@ -3,8 +3,8 @@
  * 
  * Home page of code is: http://smartmontools.sourceforge.net
  *
- * Copyright (C) 2002-10 Bruce Allen <smartmontools-support@lists.sourceforge.net>
- * Copyright (C) 2008-10 Christian Franke <smartmontools-support@lists.sourceforge.net>
+ * Copyright (C) 2002-9 Bruce Allen <smartmontools-support@lists.sourceforge.net>
+ * Copyright (C) 2008-9 Christian Franke <smartmontools-support@lists.sourceforge.net>
  * Copyright (C) 1999-2000 Michael Cornwell <cornwell@acm.org>
  * Copyright (C) 2000 Andre Hedrick <andre@linux-ide.org>
  *
@@ -58,8 +58,7 @@ extern smartmonctrl *con;
 // that SMART was first added into the ATA/ATAPI-3 Standard with
 // Revision 3 of the document, July 25, 1995.  Look at the "Document
 // Status" revision commands at the beginning of
-// http://www.t13.org/Documents/UploadedDocuments/project/d2008r7b-ATA-3.pdf
-// to see this.
+// http://www.t13.org/project/d2008r6.pdf to see this.
 #define NOVAL_0                 0x0000
 #define NOVAL_1                 0xffff
 /* word 81: minor version number */
@@ -272,19 +271,6 @@ bool parse_attribute_def(const char * opt, ata_vendor_attr_defs & defs,
     flags = ATTRFLAG_INCREASING;
   }
 
-  // Split "format[:byteorder]"
-  char byteorder[8+1] = "";
-  if (strchr(fmtname, ':')) {
-    if (!(   sscanf(fmtname, "%*[^:]%n:%8[012345rvwz]%n", &n1, byteorder, &n2) >= 1
-          && n2 == (int)strlen(fmtname)))
-      return false;
-    fmtname[n1] = 0;
-    if (strchr(byteorder, 'v'))
-      flags |= (ATTRFLAG_NO_NORMVAL|ATTRFLAG_NO_WORSTVAL);
-    if (strchr(byteorder, 'w'))
-      flags |= ATTRFLAG_NO_WORSTVAL;
-  }
-
   // Find format name
   for (i = 0; ; i++) {
     if (i >= num_format_names)
@@ -294,9 +280,9 @@ bool parse_attribute_def(const char * opt, ata_vendor_attr_defs & defs,
   }
   ata_attr_raw_format format = format_names[i].format;
 
-  // 64-bit formats use the normalized and worst value bytes.
-  if (!*byteorder && (format == RAWFMT_RAW64 || format == RAWFMT_HEX64))
-    flags |= (ATTRFLAG_NO_NORMVAL|ATTRFLAG_NO_WORSTVAL);
+  // 64-bit formats use the normalized value bytes.
+  if (format == RAWFMT_RAW64 || format == RAWFMT_HEX64)
+    flags |= ATTRFLAG_NO_NORMVAL;
 
   if (!id) {
     // "N,format" -> set format for all entries
@@ -308,7 +294,6 @@ bool parse_attribute_def(const char * opt, ata_vendor_attr_defs & defs,
       defs[i].priority = priority;
       defs[i].raw_format = format;
       defs[i].flags = flags;
-      strcpy(defs[i].byteorder, byteorder);
     }
   }
   else if (defs[id].priority <= priority) {
@@ -318,7 +303,6 @@ bool parse_attribute_def(const char * opt, ata_vendor_attr_defs & defs,
     defs[id].raw_format = format;
     defs[id].priority = priority;
     defs[id].flags = flags;
-    strcpy(defs[id].byteorder, byteorder);
   }
 
   return true;
@@ -333,7 +317,7 @@ std::string create_vendor_attribute_arg_list()
   std::string s;
   unsigned i;
   for (i = 0; i < num_format_names; i++)
-    s += strprintf("%s\tN,%s[:012345rvwz][,ATTR_NAME]",
+    s += strprintf("%s\tN,%s[,ATTR_NAME]",
       (i>0 ? "\n" : ""), format_names[i].name);
   for (i = 0; i < num_old_vendor_opts; i++)
     s += strprintf("\n\t%s", map_old_vendor_opts[i][0]);
@@ -436,19 +420,12 @@ void print_regs(const char * prefix, const ata_out_regs & r, const char * suffix
 static void prettyprint(const unsigned char *p, const char *name){
   pout("\n===== [%s] DATA START (BASE-16) =====\n", name);
   for (int i=0; i<512; i+=16, p+=16)
-#define P(n) (isprint((int)(p[n]))?(int)(p[n]):'.')
     // print complete line to avoid slow tty output and extra lines in syslog.
     pout("%03d-%03d: %02x %02x %02x %02x %02x %02x %02x %02x "
-                    "%02x %02x %02x %02x %02x %02x %02x %02x"
-                    " |%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c|"
-         "%c",
+                    "%02x %02x %02x %02x %02x %02x %02x %02x\n",
          i, i+16-1,
          p[ 0], p[ 1], p[ 2], p[ 3], p[ 4], p[ 5], p[ 6], p[ 7],
-         p[ 8], p[ 9], p[10], p[11], p[12], p[13], p[14], p[15], 
-         P( 0), P( 1), P( 2), P( 3), P( 4), P( 5), P( 6), P( 7),
-         P( 8), P( 9), P(10), P(11), P(12), P(13), P(14), P(15),
-         '\n');
-#undef P
+         p[ 8], p[ 9], p[10], p[11], p[12], p[13], p[14], p[15]);
   pout("===== [%s] DATA END (512 Bytes) =====\n\n", name);
 }
 
@@ -623,10 +600,8 @@ int smartcommandhandler(ata_device * device, smart_command_set command, int sele
                  "probable SAT/USB truncation\n");
         } else {
           // We haven't gotten output that makes sense; print out some debugging info
-          pout("Error SMART Status command failed\n");
-          pout("Please get assistance from %s\n", PACKAGE_HOMEPAGE);
-          pout("Register values returned from SMART Status command are:\n");
-          print_regs(" ", out.out_regs);
+          pout("Error SMART Status command failed\n"
+               "Please get assistance from %s\n", PACKAGE_HOMEPAGE);
           errno = EIO;
           retval = -1;
         }
@@ -862,7 +837,7 @@ int ataVersionInfo(const char ** description, const ata_identify_device * drive,
   // First check if device has ANY ATA version information in it
   if (major==NOVAL_0 || major==NOVAL_1) {
     *description=NULL;
-    return 0; // No info found
+    return -1;
   }
   
   // The minor revision number has more information - try there first
@@ -1761,8 +1736,8 @@ ata_attr_state ata_get_attr_state(const ata_smart_attribute & attr,
   if (attr.current <= thre.threshold)
     return ATTRSTATE_FAILED_NOW;
 
-  // Failed in the past if worst value is below threshold
-  if (!(defs[attr.id].flags & ATTRFLAG_NO_WORSTVAL) && attr.worst <= thre.threshold)
+  // Failed in the passed if worst value is below threshold
+  if (attr.worst <= thre.threshold)
     return ATTRSTATE_FAILED_PAST;
 
   return ATTRSTATE_OK;
@@ -1792,36 +1767,24 @@ static ata_attr_raw_format get_default_raw_format(unsigned char id)
 uint64_t ata_get_attr_raw_value(const ata_smart_attribute & attr,
                                 const ata_vendor_attr_defs & defs)
 {
-  const ata_vendor_attr_defs::entry & def = defs[attr.id];
+  // Get 48 bit raw value
+  const unsigned char * raw = attr.raw;
+  uint64_t rawvalue;
+  rawvalue =              raw[0]
+             | (          raw[1] <<  8)
+             | (          raw[2] << 16)
+             | ((uint64_t)raw[3] << 24)
+             | ((uint64_t)raw[4] << 32)
+             | ((uint64_t)raw[5] << 40);
 
-  // Use default byteorder if not specified
-  const char * byteorder = def.byteorder;
-  if (!*byteorder) {
-    if (def.raw_format == RAWFMT_RAW64 || def.raw_format == RAWFMT_HEX64)
-      byteorder = "543210wv";
-    else
-      byteorder = "543210";
+  if (defs[attr.id].flags & ATTRFLAG_NO_NORMVAL) {
+    // Some SSD vendors use bytes 3-10 from the Attribute
+    // Data Structure to store a 64-bit raw value.
+    rawvalue <<= 8;
+    rawvalue |= attr.worst;
+    rawvalue <<= 8;
+    rawvalue |= attr.current;
   }
-
-  // Build 64-bit value from selected bytes
-  uint64_t rawvalue = 0;
-  for (int i = 0; byteorder[i]; i++) {
-    unsigned char b;
-    switch (byteorder[i]) {
-      case '0': b = attr.raw[0];  break;
-      case '1': b = attr.raw[1];  break;
-      case '2': b = attr.raw[2];  break;
-      case '3': b = attr.raw[3];  break;
-      case '4': b = attr.raw[4];  break;
-      case '5': b = attr.raw[5];  break;
-      case 'r': b = attr.reserv;  break;
-      case 'v': b = attr.current; break;
-      case 'w': b = attr.worst;   break;
-      default : b = 0;            break;
-    }
-    rawvalue <<= 8; rawvalue |= b;
-  }
-
   return rawvalue;
 }
 
@@ -1830,7 +1793,7 @@ uint64_t ata_get_attr_raw_value(const ata_smart_attribute & attr,
 std::string ata_format_attr_raw_value(const ata_smart_attribute & attr,
                                       const ata_vendor_attr_defs & defs)
 {
-  // Get 48 bit or 64 bit raw value
+  // Get 48 bit or64 bit raw value
   uint64_t rawvalue = ata_get_attr_raw_value(attr, defs);
 
   // Get 16 bit words
@@ -1858,12 +1821,15 @@ std::string ata_format_attr_raw_value(const ata_smart_attribute & attr,
     break;
 
   case RAWFMT_RAW48:
-  case RAWFMT_RAW64:
     s = strprintf("%"PRIu64, rawvalue);
     break;
 
   case RAWFMT_HEX48:
     s = strprintf("0x%012"PRIx64, rawvalue);
+    break;
+
+  case RAWFMT_RAW64:
+    s = strprintf("%"PRIu64, rawvalue);
     break;
 
   case RAWFMT_HEX64:
@@ -2232,7 +2198,7 @@ int ataReadSCTTempHist(ata_device * device, ata_sct_temperature_history_table * 
     return -1;
 
   if (!(sts->ext_status_code == 0 && sts->action_code == 5 && sts->function_code == 1)) {
-    pout("Error unexpected SCT status 0x%04x (action_code=%u, function_code=%u)\n",
+    pout("Error unexcepted SCT status 0x%04x (action_code=%u, function_code=%u)\n",
       sts->ext_status_code, sts->action_code, sts->function_code);
     return -1;
   }
